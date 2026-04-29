@@ -1,0 +1,45 @@
+repos:
+  # ── General ────────────────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: no-commit-to-branch
+        args: [--branch, main]
+
+  # ── Python: ruff (lint + format) ───────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  # ── JS/CSS/JSON/Markdown: prettier ─────────────────────────────────────────
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: \.(js|jsx|css|json|md|yaml|yml)$
+        exclude: ^(node_modules|frontend/dist|\.gitignore)
+        additional_dependencies:
+          - prettier@3.3.3
+
+  # ── JS/JSX: eslint ─────────────────────────────────────────────────────────
+  # Runs from frontend/ so it uses frontend/node_modules and eslint.config.js
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd frontend && npx eslint --fix src/'
+        language: system
+        files: ^frontend/src/.*\.(js|jsx)$
+        pass_filenames: false
