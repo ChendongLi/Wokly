@@ -13,7 +13,7 @@ function MealSection({ title, meal, readOnly }) {
   return (
     <section className="mb-4">
       <div className="flex items-center justify-between px-4 mb-2">
-        <h3 className="font-semibold text-gray-700">{title}</h3>
+        <h3 className="font-bold text-gray-800 pl-2 border-l-4 border-orange-400">{title}</h3>
         {isLunch && (
           <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
             <span>太太在家</span>
@@ -68,7 +68,7 @@ export default function MenuTab({ weekData, readOnly = false }) {
           <button
             onClick={() => generate.mutate()}
             disabled={generate.isPending}
-            className="text-sm px-3 py-1.5 rounded-lg bg-orange-500 text-white font-medium disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl bg-orange-500 text-white text-base font-bold shadow-md active:scale-95 transition-transform disabled:opacity-50"
           >
             {generate.isPending ? '生成中…' : '生成菜单'}
           </button>

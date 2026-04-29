@@ -30,11 +30,14 @@ export default function App() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex flex-col items-center py-2 text-xs transition-colors ${
+            className={`flex-1 flex flex-col items-center pt-1 pb-2 text-xs transition-colors relative ${
               activeTab === tab.id ? 'text-orange-500' : 'text-gray-400'
             }`}
           >
-            <span className="text-xl leading-none mb-0.5">{tab.icon}</span>
+            {activeTab === tab.id && (
+              <span className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-orange-500" />
+            )}
+            <span className="text-xl leading-none mb-0.5 mt-1">{tab.icon}</span>
             <span>{tab.label}</span>
           </button>
         ))}

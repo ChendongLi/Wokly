@@ -7,10 +7,10 @@ export default function DayNav({ selected, onChange }) {
         <button
           key={day}
           onClick={() => onChange(day)}
-          className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+          className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
             selected === day
-              ? 'bg-orange-500 text-white'
-              : 'bg-white text-gray-600 border border-gray-200'
+              ? 'bg-orange-500 text-white shadow-md scale-105'
+              : 'bg-white text-gray-500 border border-gray-200'
           }`}
         >
           {day}
