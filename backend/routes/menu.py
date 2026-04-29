@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from database import get_db
 from models import (
@@ -62,7 +63,10 @@ async def get_current_week(db: AsyncSession = Depends(get_db)):
 
 @router.post("/generate")
 async def generate_menu(db: AsyncSession = Depends(get_db)):
-    monday = _next_monday()
+    # Use current week if it has no menu yet; otherwise generate next week
+    current = _current_monday()
+    existing = await db.execute(select(Week).where(Week.week_start == current))
+    monday = current if not existing.scalar_one_or_none() else _next_monday()
 
     result = await db.execute(select(Week).where(Week.week_start == monday))
     week = result.scalar_one_or_none()
@@ -155,6 +159,7 @@ async def update_meal(meal_id: str, body: MealUpdateRequest, db: AsyncSession = 
         meal.soup = body.dish
     else:
         raise HTTPException(status_code=400, detail=f"Unknown dish_slot: {slot}")
+    flag_modified(meal, slot)
 
     await db.commit()
     await db.refresh(meal)
@@ -196,6 +201,7 @@ async def regen_meal_dish(
         meal.optional_dish = new_dish
     elif dish_slot == "soup":
         meal.soup = new_dish
+    flag_modified(meal, dish_slot)
 
     await db.commit()
     await db.refresh(meal)

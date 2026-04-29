@@ -1,9 +1,50 @@
 import json
+import logging
 import os
 
-import anthropic
+from services import llm
 
-client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+logger = logging.getLogger(__name__)
+
+_MOCK_DISHES = {
+    "meat": {
+        "name": "可乐鸡翅（替换）",
+        "tag": "meat",
+        "style": "炖烧",
+        "diff": 2,
+        "ingredients": "鸡翅500g、可乐1罐、生抽老抽、姜片",
+        "steps": ["鸡翅焯水", "煎至两面金黄", "倒可乐生抽老抽焖20分钟收汁"],
+        "search_query": "可乐鸡翅做法",
+    },
+    "veg": {
+        "name": "蒜蓉菠菜（替换）",
+        "tag": "veg",
+        "style": "快炒",
+        "diff": 1,
+        "ingredients": "菠菜300g、蒜末、盐、香油",
+        "steps": ["菠菜焯水过凉", "蒜末爆香下菠菜翻炒调味"],
+        "search_query": "蒜蓉菠菜",
+    },
+    "soup": {
+        "name": "紫菜蛋花汤（替换）",
+        "tag": "soup",
+        "style": "汤",
+        "diff": 1,
+        "ingredients": "紫菜10g、鸡蛋1个、葱花、盐",
+        "steps": ["水烧开下紫菜", "蛋液冲入加盐葱花"],
+        "search_query": "紫菜蛋花汤",
+    },
+    "opt": {
+        "name": "凉拌黄瓜（替换）",
+        "tag": "opt",
+        "style": "凉拌",
+        "diff": 1,
+        "ingredients": "黄瓜1根、蒜末、醋、盐、香油",
+        "steps": ["黄瓜拍碎切段", "加蒜末醋盐香油拌匀"],
+        "search_query": "凉拌黄瓜",
+    },
+}
+
 
 REGEN_SYSTEM = """你是一位专做山东鲁菜和东北家常菜的家庭厨师助手。
 请重新生成一道菜来替换现有的菜品。
@@ -32,20 +73,31 @@ async def regen_single_dish(
     diff_level: int,
     existing_dishes: list[str],
 ) -> dict:
+    if os.getenv("USE_MOCK_MENU") == "1":
+        import copy
+
+        tag = (
+            "soup"
+            if dish_slot == "soup"
+            else (
+                "opt" if dish_slot == "optional" else ("meat" if dish_slot == "dish_1" else "veg")
+            )
+        )
+        logger.info("USE_MOCK_MENU=1: returning mock regen dish (no API call)")
+        return copy.deepcopy(_MOCK_DISHES.get(tag, _MOCK_DISHES["veg"]))
+
     context = (
         f"餐次：{meal_type}，位置：{dish_slot}，难度：{diff_level} 星\n"
         f"本周已有菜品（不得重复）：{', '.join(existing_dishes)}"
     )
-    response = await client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
-        system=[
-            {
-                "type": "text",
-                "text": REGEN_SYSTEM,
-                "cache_control": {"type": "ephemeral"},
-            }
-        ],
-        messages=[{"role": "user", "content": context}],
+    raw_text, _ = await llm.chat(
+        REGEN_SYSTEM, [{"role": "user", "content": context}], max_tokens=512
     )
-    return json.loads(response.content[0].text)
+
+    raw_text = raw_text.strip()
+    if not raw_text:
+        raise RuntimeError("Empty regen response from AI provider")
+    if raw_text.startswith("```"):
+        raw_text = raw_text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+    return json.loads(raw_text)
