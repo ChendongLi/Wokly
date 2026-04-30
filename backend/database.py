@@ -1,4 +1,6 @@
 import os
+import ssl
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from dotenv import load_dotenv
 from sqlalchemy import event
@@ -9,7 +11,20 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./wokly.db")
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+if DATABASE_URL.startswith("sqlite"):
+    connect_args: dict = {"check_same_thread": False}
+else:
+    # asyncpg does not accept sslmode/channel_binding as URL query params.
+    # Strip them from the URL and pass an SSL context via connect_args instead.
+    _parsed = urlparse(DATABASE_URL)
+    _params = {
+        k: v[0]
+        for k, v in parse_qs(_parsed.query).items()
+        if k not in ("sslmode", "channel_binding")
+    }
+    DATABASE_URL = urlunparse(_parsed._replace(query=urlencode(_params)))
+    _ssl_ctx = ssl.create_default_context()
+    connect_args = {"ssl": _ssl_ctx}
 
 engine = create_async_engine(DATABASE_URL, connect_args=connect_args)
 

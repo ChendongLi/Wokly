@@ -7,11 +7,12 @@ SERVICE="wokly"
 REPO="wokly-repo"
 IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/$SERVICE"
 
-echo "Building $IMAGE ..."
-docker build -t "$IMAGE" .
-
-echo "Pushing $IMAGE ..."
-docker push "$IMAGE"
+echo "Building and pushing $IMAGE via Cloud Build ..."
+gcloud builds submit \
+  --tag "$IMAGE" \
+  --project "$PROJECT_ID" \
+  --region "$REGION" \
+  .
 
 echo "Deploying to Cloud Run ($REGION) ..."
 gcloud run deploy "$SERVICE" \
@@ -25,7 +26,7 @@ gcloud run deploy "$SERVICE" \
   --cpu 1 \
   --timeout 300 \
   --set-secrets "DATABASE_URL=wokly-neon-url:latest" \
-  --set-secrets "OPENAI_API_KEY=wokly-openai-key:latest" \
+  --set-secrets "OPENAI_API_KEY=OPENAI_API_KEY:latest" \
   --set-env-vars "AI_PROVIDER=openai" \
   --allow-unauthenticated
 

@@ -6,7 +6,7 @@ REGION="${REGION:-us-west1}"
 SERVICE="wokly"
 
 echo "Mapping $DOMAIN → Cloud Run service '$SERVICE' ..."
-gcloud run domain-mappings create \
+gcloud beta run domain-mappings create \
   --service "$SERVICE" \
   --domain "$DOMAIN" \
   --region "$REGION"
