@@ -117,17 +117,72 @@ docker-compose up --build
 
 ---
 
-## Production (Neon + GCP Cloud Run)
+## Deployment (GCP Cloud Run + Neon)
 
-Switch `DATABASE_URL` in your environment to a Neon PostgreSQL URL:
+Live at **https://menu.agentlens.net**
 
-```
-DATABASE_URL=postgresql+asyncpg://user:pass@host/dbname
+### One-time GCP setup
+
+```bash
+# Enable required APIs
+gcloud services enable \
+  run.googleapis.com \
+  artifactregistry.googleapis.com \
+  secretmanager.googleapis.com \
+  cloudscheduler.googleapis.com \
+  cloudbuild.googleapis.com
+
+# Create Artifact Registry repository
+gcloud artifacts repositories create wokly-repo \
+  --repository-format=docker --location=us-west1
+
+# Authenticate Docker
+gcloud auth configure-docker us-west1-docker.pkg.dev
+
+# Store secrets
+echo -n "postgresql+asyncpg://user:pass@host/dbname" \
+  | gcloud secrets create wokly-neon-url --data-file=-
+echo -n "sk-..." \
+  | gcloud secrets create wokly-openai-key --data-file=-
 ```
 
 Run `migrations/001_init.sql` against your Neon database once to initialize the schema.
 
-GCP Cloud Run deployment scripts are tracked separately in a future PR.
+### Deploy
+
+```bash
+GCP_PROJECT_ID=agentlens-489006 ./deploy.sh
+```
+
+Builds the multi-stage Docker image, pushes to Artifact Registry, and deploys to Cloud Run
+(`us-west1`, min 0 / max 2 instances, 512 Mi). Secrets are injected from Secret Manager.
+
+### Custom domain
+
+```bash
+./domain.sh
+# Add the CNAME record printed by the command at your DNS provider.
+# TLS is provisioned automatically.
+```
+
+### Cloud Scheduler (weekly menu generation)
+
+```bash
+GCP_PROJECT_ID=agentlens-489006 ./scheduler.sh
+```
+
+Creates a job that fires every Friday at 11:00 AM PST → `POST /api/generate`.
+
+To trigger manually:
+
+```bash
+gcloud scheduler jobs run wokly-weekly-gen --location us-west1
+```
+
+### CI/CD via Cloud Build
+
+Connect your GitHub repo in the Cloud Build trigger UI and point it at `cloudbuild.yaml`.
+Every merge to `main` will automatically build and deploy.
 
 ---
 

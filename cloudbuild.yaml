@@ -1,0 +1,46 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$COMMIT_SHA'
+      - -t
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:latest'
+      - .
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - --all-tags
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE'
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_SERVICE
+      - --image=$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$COMMIT_SHA
+      - --platform=managed
+      - --region=$_REGION
+      - --project=$PROJECT_ID
+      - --min-instances=0
+      - --max-instances=2
+      - --memory=512Mi
+      - --cpu=1
+      - --timeout=300
+      - --set-secrets=DATABASE_URL=wokly-neon-url:latest,OPENAI_API_KEY=wokly-openai-key:latest
+      - --set-env-vars=AI_PROVIDER=openai
+      - --allow-unauthenticated
+
+images:
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$COMMIT_SHA'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:latest'
+
+substitutions:
+  _REGION: us-west1
+  _SERVICE: wokly
+  _REPO: wokly-repo
+
+options:
+  logging: CLOUD_LOGGING_ONLY
