@@ -131,7 +131,7 @@ async def generate_menu(db: AsyncSession = Depends(get_db)):
             )
         )
 
-    week.generated_at = datetime.now(UTC)
+    week.generated_at = datetime.now(UTC).replace(tzinfo=None)
     week.status = "ready"
     await db.commit()
 
