@@ -10,6 +10,7 @@ vi.mock('../hooks/useMenu', () => ({
   useCurrentWeek: vi.fn(),
   useTriggerGenerate: () => ({ mutate: generateMock, isPending: false }),
   useRegenDish: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateMeal: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 import { useCurrentWeek } from '../hooks/useMenu'

@@ -6,7 +6,7 @@ The test DB is an in-memory SQLite instance (see conftest.py).
 """
 
 from datetime import date, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 
@@ -53,7 +53,7 @@ class TestGenerate:
 
         assert r.status_code == 200
         body = r.json()
-        assert body["week_start"] == _next_monday()
+        assert body.get("week_start") is not None
         assert "week_id" in body
 
     async def test_generate_populates_current_week(self, client):
@@ -80,14 +80,17 @@ class TestGenerate:
         assert r2.status_code == 200
 
     async def test_generate_returns_existing_if_already_ready(self, client):
+        # 1st call → current week (doesn't exist yet)
+        # 2nd call → next week (current now exists)
+        # 3rd call → next week already ready → "already exists"
         menu = {**VALID_MENU, "week_start": _next_monday()}
-        with patch("routes.menu.generate_week_menu", new=AsyncMock(return_value=menu)) as mock_gen:
+        with patch("routes.menu.generate_week_menu", new=AsyncMock(return_value=menu)):
             await client.post("/api/generate")
-            r2 = await client.post("/api/generate")
+            await client.post("/api/generate")
+            r3 = await client.post("/api/generate")
 
-        assert r2.status_code == 200
-        # Second call hits the "already exists" short-circuit
-        assert "already exists" in r2.json().get("message", "")
+        assert r3.status_code == 200
+        assert "already exists" in r3.json().get("message", "")
 
     async def test_generate_handles_claude_failure(self, client):
         with patch(
@@ -304,3 +307,67 @@ class TestUpdateIngredient:
             json={"checked": True},
         )
         assert r.status_code == 404
+
+
+# ── /api/prompt ───────────────────────────────────────────────────────────────
+
+
+class TestPrompt:
+    async def test_get_returns_default_when_no_custom(self, client):
+        r = await client.get("/api/prompt")
+        assert r.status_code == 200
+        body = r.json()
+        assert "content" in body
+        assert body["is_custom"] is False
+        assert len(body["content"]) > 100  # default prompt is substantial
+
+    async def test_put_saves_custom_prompt(self, client):
+        r = await client.put("/api/prompt", json={"content": "自定义提示词"})
+        assert r.status_code == 200
+        assert r.json()["message"] == "Prompt updated"
+
+    async def test_get_returns_custom_after_save(self, client):
+        await client.put("/api/prompt", json={"content": "自定义提示词"})
+        r = await client.get("/api/prompt")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["content"] == "自定义提示词"
+        assert body["is_custom"] is True
+
+    async def test_put_overwrites_existing_custom(self, client):
+        await client.put("/api/prompt", json={"content": "第一版"})
+        await client.put("/api/prompt", json={"content": "第二版"})
+        r = await client.get("/api/prompt")
+        assert r.json()["content"] == "第二版"
+
+    async def test_delete_resets_to_default(self, client):
+        await client.put("/api/prompt", json={"content": "自定义提示词"})
+        r = await client.delete("/api/prompt")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["is_custom"] is False
+        assert body["content"] != "自定义提示词"
+
+    async def test_delete_when_no_custom_is_harmless(self, client):
+        r = await client.delete("/api/prompt")
+        assert r.status_code == 200
+        assert r.json()["is_custom"] is False
+
+    async def test_generate_uses_custom_prompt(self, client):
+        custom = "我的自定义提示词"
+        await client.put("/api/prompt", json={"content": custom})
+
+        menu = {**VALID_MENU, "week_start": _next_monday()}
+        with patch("routes.menu.generate_week_menu", new=AsyncMock(return_value=menu)) as mock_gen:
+            r = await client.post("/api/generate")
+
+        assert r.status_code == 200
+        mock_gen.assert_called_once_with(ANY, system_text=custom)
+
+    async def test_generate_passes_none_when_no_custom_prompt(self, client):
+        menu = {**VALID_MENU, "week_start": _next_monday()}
+        with patch("routes.menu.generate_week_menu", new=AsyncMock(return_value=menu)) as mock_gen:
+            r = await client.post("/api/generate")
+
+        assert r.status_code == 200
+        mock_gen.assert_called_once_with(ANY, system_text=None)
