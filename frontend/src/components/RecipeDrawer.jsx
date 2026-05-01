@@ -101,6 +101,16 @@ export default function RecipeDrawer({ dish, onClose }) {
             >
               ▶️ YouTube
             </a>
+            {dish.url && (
+              <a
+                href={dish.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-orange-50 text-orange-600 text-sm font-medium"
+              >
+                🌐 食谱
+              </a>
+            )}
           </section>
         </div>
       </div>

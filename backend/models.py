@@ -57,6 +57,13 @@ class Meal(Base):
     )
 
 
+class Config(Base):
+    __tablename__ = "config"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class Ingredient(Base):
     __tablename__ = "ingredients"
 
@@ -141,3 +148,7 @@ class MealUpdateRequest(BaseModel):
 class IngredientUpdateRequest(BaseModel):
     checked: bool | None = None
     store: str | None = None
+
+
+class PromptUpdateRequest(BaseModel):
+    content: str

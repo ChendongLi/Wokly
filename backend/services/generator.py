@@ -392,7 +392,7 @@ _MOCK_MENU = {
 }
 
 
-async def generate_week_menu(week_start: str) -> dict:
+async def generate_week_menu(week_start: str, system_text: str | None = None) -> dict:
     if os.getenv("USE_MOCK_MENU") == "1":
         import copy
 
@@ -401,7 +401,8 @@ async def generate_week_menu(week_start: str) -> dict:
         mock["week_start"] = week_start
         return mock
 
-    system_text = SYSTEM_PROMPT.read_text(encoding="utf-8")
+    if system_text is None:
+        system_text = SYSTEM_PROMPT.read_text(encoding="utf-8")
 
     messages: list[dict] = [
         {"role": "user", "content": f"请生成从 {week_start} 开始那一周（周一至周五）的菜单。"}
