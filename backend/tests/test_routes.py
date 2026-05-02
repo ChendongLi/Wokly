@@ -188,6 +188,64 @@ class TestRegenDish:
         assert r.status_code == 404
 
 
+# ── /api/meal/{id}/fill ───────────────────────────────────────────────────────
+
+
+class TestFillDish:
+    async def _create_week_and_get_meal_id(self, client):
+        menu = {**VALID_MENU, "week_start": _next_monday()}
+        with patch("routes.menu.generate_week_menu", new=AsyncMock(return_value=menu)):
+            r = await client.post("/api/generate")
+        week_id = r.json()["week_id"]
+        r2 = await client.get(f"/api/week/{week_id}")
+        return r2.json()["meals"][0]["id"]
+
+    async def test_fill_updates_dish_with_ai_recipe(self, client):
+        meal_id = await self._create_week_and_get_meal_id(client)
+        filled_dish = {
+            "name": "土豆炖牛肉",
+            "tag": "meat",
+            "style": "炖烧",
+            "diff": 2,
+            "ingredients": "牛肉、土豆",
+            "steps": ["切块", "炒糖色", "炖煮"],
+            "search_query": "土豆炖牛肉",
+        }
+        with patch("routes.menu.fill_dish_by_name", new=AsyncMock(return_value=filled_dish)):
+            r = await client.post(
+                f"/api/meal/{meal_id}/fill",
+                json={"dish_slot": "dish1", "name": "土豆炖牛肉"},
+            )
+        assert r.status_code == 200
+        assert r.json()["dish1"]["name"] == "土豆炖牛肉"
+        assert r.json()["dish1"]["steps"] == ["切块", "炒糖色", "炖煮"]
+
+    async def test_fill_missing_name_returns_400(self, client):
+        meal_id = await self._create_week_and_get_meal_id(client)
+        r = await client.post(f"/api/meal/{meal_id}/fill", json={"dish_slot": "dish1"})
+        assert r.status_code == 400
+
+    async def test_fill_nonexistent_meal_returns_404(self, client):
+        r = await client.post(
+            "/api/meal/00000000-0000-0000-0000-000000000000/fill",
+            json={"dish_slot": "dish1", "name": "测试菜"},
+        )
+        assert r.status_code == 404
+
+    async def test_fill_falls_back_when_ai_fails(self, client):
+        meal_id = await self._create_week_and_get_meal_id(client)
+        with patch(
+            "routes.menu.fill_dish_by_name", new=AsyncMock(side_effect=RuntimeError("AI error"))
+        ):
+            r = await client.post(
+                f"/api/meal/{meal_id}/fill",
+                json={"dish_slot": "dish1", "name": "测试菜", "url": "https://example.com"},
+            )
+        assert r.status_code == 200
+        assert r.json()["dish1"]["name"] == "测试菜"
+        assert r.json()["dish1"]["url"] == "https://example.com"
+
+
 # ── /api/history ──────────────────────────────────────────────────────────────
 
 

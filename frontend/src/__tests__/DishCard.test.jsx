@@ -4,14 +4,16 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import DishCard from '../components/DishCard'
 
-const { mockRegenMutate, mockUpdateMutate } = vi.hoisted(() => ({
+const { mockRegenMutate, mockUpdateMutate, mockFillMutate } = vi.hoisted(() => ({
   mockRegenMutate: vi.fn(),
   mockUpdateMutate: vi.fn(),
+  mockFillMutate: vi.fn(),
 }))
 
 vi.mock('../hooks/useMenu', () => ({
   useRegenDish: () => ({ mutate: mockRegenMutate, isPending: false }),
   useUpdateMeal: () => ({ mutate: mockUpdateMutate, isPending: false }),
+  useFillDish: () => ({ mutate: mockFillMutate, isPending: false }),
 }))
 
 const mockDish = {
@@ -33,6 +35,7 @@ describe('DishCard', () => {
   beforeEach(() => {
     mockRegenMutate.mockClear()
     mockUpdateMutate.mockClear()
+    mockFillMutate.mockClear()
   })
 
   it('renders dish name', () => {
@@ -108,8 +111,8 @@ describe('DishCard', () => {
     expect(screen.queryByPlaceholderText('菜名')).toBeNull()
   })
 
-  it('calls updateMeal.mutate with new dish name on save', async () => {
-    mockUpdateMutate.mockImplementation((_data, opts) => opts?.onSuccess?.())
+  it('calls fillDish.mutate when dish name changes on save', async () => {
+    mockFillMutate.mockImplementation((_data, opts) => opts?.onSuccess?.())
     const user = userEvent.setup()
     render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
     await user.click(screen.getByTitle('编辑'))
@@ -117,14 +120,25 @@ describe('DishCard', () => {
     await user.clear(nameInput)
     await user.type(nameInput, '新菜名')
     await user.click(screen.getByText('保存'))
-    expect(mockUpdateMutate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mealId: 'm1',
-        dish_slot: 'dish1',
-        dish: expect.objectContaining({ name: '新菜名' }),
-      }),
+    expect(mockFillMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ mealId: 'm1', dish_slot: 'dish1', name: '新菜名' }),
       expect.any(Object)
     )
+    expect(mockUpdateMutate).not.toHaveBeenCalled()
+  })
+
+  it('calls updateMeal.mutate when only URL changes (name unchanged)', async () => {
+    mockUpdateMutate.mockImplementation((_data, opts) => opts?.onSuccess?.())
+    const user = userEvent.setup()
+    render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
+    await user.click(screen.getByTitle('编辑'))
+    await user.type(screen.getByPlaceholderText('食谱链接（可选）'), 'https://example.com')
+    await user.click(screen.getByText('保存'))
+    expect(mockUpdateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ mealId: 'm1', dish_slot: 'dish1' }),
+      expect.any(Object)
+    )
+    expect(mockFillMutate).not.toHaveBeenCalled()
   })
 
   it('includes custom URL in saved dish when provided', async () => {
