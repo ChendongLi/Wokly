@@ -1,19 +1,20 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import MenuTab from '../components/MenuTab'
 
-const generateMock = vi.fn()
+const { generateMock } = vi.hoisted(() => ({ generateMock: vi.fn() }))
 
 vi.mock('../hooks/useMenu', () => ({
   useCurrentWeek: vi.fn(),
-  useTriggerGenerate: () => ({ mutate: generateMock, isPending: false }),
+  useTriggerGenerate: () => ({ mutate: generateMock, isPending: false, data: undefined }),
   useRegenDish: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateMeal: () => ({ mutate: vi.fn(), isPending: false }),
+  useWeekDetail: vi.fn(() => ({ data: undefined })),
 }))
 
-import { useCurrentWeek } from '../hooks/useMenu'
+import { useCurrentWeek, useWeekDetail } from '../hooks/useMenu'
 
 function wrapper({ children }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -71,6 +72,8 @@ const mockWeek = {
     makeMeal(day, 'dinner'),
   ]),
 }
+
+beforeEach(() => generateMock.mockClear())
 
 describe('MenuTab – empty state', () => {
   it('shows empty state message when no week data', () => {
@@ -158,5 +161,24 @@ describe('MenuTab – readOnly mode', () => {
     useCurrentWeek.mockReturnValue({ data: mockWeek, isLoading: false })
     render(<MenuTab weekData={mockWeek} readOnly />, { wrapper })
     expect(screen.queryByText('生成菜单')).toBeNull()
+  })
+})
+
+describe('MenuTab – generate navigates to referenced week', () => {
+  it('shows 下周菜单 and 返回本周 when generated week differs from current', async () => {
+    const nextWeek = { ...mockWeek, id: 'week-next', week_start: '2026-05-04' }
+    useCurrentWeek.mockReturnValue({ data: mockWeek, isLoading: false })
+    // After generate triggers onSuccess, MenuTab calls useWeekDetail('week-next') → nextWeek
+    useWeekDetail.mockReturnValue({ data: nextWeek })
+    generateMock.mockImplementation((_opts, callbacks) => {
+      callbacks?.onSuccess?.({ week_id: 'week-next' })
+    })
+
+    const user = userEvent.setup()
+    render(<MenuTab />, { wrapper })
+    await user.click(screen.getByText('生成菜单'))
+
+    expect(screen.getByText('下周菜单')).toBeTruthy()
+    expect(screen.getByText('← 返回本周')).toBeTruthy()
   })
 })

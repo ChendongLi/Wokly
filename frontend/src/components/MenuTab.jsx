@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import DayNav from './DayNav'
 import DishCard from './DishCard'
-import { useCurrentWeek, useTriggerGenerate } from '../hooks/useMenu'
+import { useCurrentWeek, useTriggerGenerate, useWeekDetail } from '../hooks/useMenu'
 
 function MealSection({ title, meal, readOnly }) {
   const [wfhOn, setWfhOn] = useState(false)
@@ -48,25 +48,54 @@ function MealSection({ title, meal, readOnly }) {
   )
 }
 
+function weekLabel(weekStart) {
+  if (!weekStart) return '菜单'
+  const d = new Date(weekStart + 'T00:00:00')
+  return `${d.getMonth() + 1}月${d.getDate()}日那周`
+}
+
 export default function MenuTab({ weekData, readOnly = false }) {
   const [selectedDay, setSelectedDay] = useState('周一')
+  const [genWeekId, setGenWeekId] = useState(null)
   const { data: currentWeek, isLoading } = useCurrentWeek()
+  const { data: genWeek } = useWeekDetail(genWeekId)
   const generate = useTriggerGenerate()
 
-  const week = weekData || currentWeek
+  const baseWeek = weekData || currentWeek
+  // After generate, show the week that was just referenced (may be next week)
+  const week = genWeek || baseWeek
+
+  const isNextWeek = genWeek && baseWeek && genWeek.week_start !== baseWeek.week_start
 
   const dayMeals = week?.meals?.filter((m) => m.day === selectedDay) || []
   const lunch = dayMeals.find((m) => m.meal_type === 'lunch')
   const dinner = dayMeals.find((m) => m.meal_type === 'dinner')
 
+  const handleGenerate = () => {
+    generate.mutate(undefined, {
+      onSuccess: (data) => {
+        if (data?.week_id) setGenWeekId(data.week_id)
+      },
+    })
+  }
+
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-5 pb-1">
-        <h1 className="text-xl font-bold text-gray-900">本周菜单</h1>
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">
+            {isNextWeek ? `下周菜单` : '本周菜单'}
+          </h1>
+          {isNextWeek && (
+            <button onClick={() => setGenWeekId(null)} className="text-xs text-orange-500 mt-0.5">
+              ← 返回本周
+            </button>
+          )}
+        </div>
         {!readOnly && (
           <button
-            onClick={() => generate.mutate()}
+            onClick={handleGenerate}
             disabled={generate.isPending}
             className="px-5 py-2.5 rounded-xl bg-orange-500 text-white text-base font-bold shadow-md active:scale-95 transition-transform disabled:opacity-50"
           >
@@ -84,7 +113,7 @@ export default function MenuTab({ weekData, readOnly = false }) {
           <p className="text-gray-400 mb-4">本周菜单还没生成</p>
           {!readOnly && (
             <button
-              onClick={() => generate.mutate()}
+              onClick={handleGenerate}
               disabled={generate.isPending}
               className="px-6 py-3 rounded-xl bg-orange-500 text-white font-semibold"
             >
