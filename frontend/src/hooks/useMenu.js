@@ -90,6 +90,18 @@ export function useHealth() {
   })
 }
 
+export function useDeleteWeek() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (weekId) => api(`/api/week/${weekId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['week'] })
+      qc.invalidateQueries({ queryKey: ['history'] })
+      qc.invalidateQueries({ queryKey: ['ingredients'] })
+    },
+  })
+}
+
 export function useGetPrompt() {
   return useQuery({
     queryKey: ['prompt'],
