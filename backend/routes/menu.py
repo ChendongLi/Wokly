@@ -294,6 +294,20 @@ async def update_ingredient(
     return ing
 
 
+# ── DELETE /api/week/{id} ─────────────────────────────────────────────────────
+
+
+@router.delete("/week/{week_id}")
+async def delete_week(week_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Week).where(Week.id == week_id))
+    week = result.scalar_one_or_none()
+    if not week:
+        raise HTTPException(status_code=404, detail="Week not found")
+    await db.delete(week)
+    await db.commit()
+    return {"message": "Week deleted"}
+
+
 # ── GET /api/health ───────────────────────────────────────────────────────────
 
 
