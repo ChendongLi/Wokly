@@ -85,4 +85,18 @@ describe('RecipeDrawer', () => {
     expect(screen.getByText('多料炒')).toBeTruthy()
     expect(screen.getByText('荤')).toBeTruthy()
   })
+
+  // ── custom recipe URL ────────────────────────────────────────────────────────
+
+  it('does not render custom link when dish.url is absent', () => {
+    render(<RecipeDrawer dish={mockDish} onClose={() => {}} />)
+    expect(screen.queryByText('🌐 食谱')).toBeNull()
+  })
+
+  it('renders custom recipe link with correct href when dish.url is set', () => {
+    const dishWithUrl = { ...mockDish, url: 'https://example.com/recipe' }
+    render(<RecipeDrawer dish={dishWithUrl} onClose={() => {}} />)
+    const link = screen.getByText('🌐 食谱').closest('a')
+    expect(link.href).toBe('https://example.com/recipe')
+  })
 })

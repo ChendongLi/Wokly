@@ -4,6 +4,16 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import DishCard from '../components/DishCard'
 
+const { mockRegenMutate, mockUpdateMutate } = vi.hoisted(() => ({
+  mockRegenMutate: vi.fn(),
+  mockUpdateMutate: vi.fn(),
+}))
+
+vi.mock('../hooks/useMenu', () => ({
+  useRegenDish: () => ({ mutate: mockRegenMutate, isPending: false }),
+  useUpdateMeal: () => ({ mutate: mockUpdateMutate, isPending: false }),
+}))
+
 const mockDish = {
   name: '红烧鸡块',
   tag: 'meat',
@@ -14,20 +24,17 @@ const mockDish = {
   search_query: '红烧鸡块做法',
 }
 
-// Mock the useRegenDish hook
-vi.mock('../hooks/useMenu', () => ({
-  useRegenDish: () => ({
-    mutate: vi.fn(),
-    isPending: false,
-  }),
-}))
-
 function wrapper({ children }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 }
 
 describe('DishCard', () => {
+  beforeEach(() => {
+    mockRegenMutate.mockClear()
+    mockUpdateMutate.mockClear()
+  })
+
   it('renders dish name', () => {
     render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
     expect(screen.getByText('红烧鸡块')).toBeTruthy()
@@ -48,14 +55,16 @@ describe('DishCard', () => {
     expect(screen.getByText('⭐⭐⭐')).toBeTruthy()
   })
 
-  it('renders regen button when not readOnly', () => {
+  it('renders regen and edit buttons when not readOnly', () => {
     render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
     expect(screen.getByTitle('重新生成')).toBeTruthy()
+    expect(screen.getByTitle('编辑')).toBeTruthy()
   })
 
-  it('hides regen button in readOnly mode', () => {
+  it('hides regen and edit buttons in readOnly mode', () => {
     render(<DishCard dish={mockDish} mealId="m1" slot="dish1" readOnly />, { wrapper })
     expect(screen.queryByTitle('重新生成')).toBeNull()
+    expect(screen.queryByTitle('编辑')).toBeNull()
   })
 
   it('opens RecipeDrawer when card is clicked', async () => {
@@ -63,7 +72,6 @@ describe('DishCard', () => {
     render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
     const card = screen.getByText('红烧鸡块').closest('div')
     await user.click(card)
-    // RecipeDrawer shows the dish name as heading
     expect(screen.getAllByText('红烧鸡块').length).toBeGreaterThan(1)
   })
 
@@ -73,16 +81,72 @@ describe('DishCard', () => {
   })
 
   it('calls regen mutate when ↺ button clicked', async () => {
-    const mutateMock = vi.fn()
-    vi.doMock('../hooks/useMenu', () => ({
-      useRegenDish: () => ({ mutate: mutateMock, isPending: false }),
-    }))
-
     const user = userEvent.setup()
     render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
-    const regenBtn = screen.getByTitle('重新生成')
-    await user.click(regenBtn)
-    // mutate is mocked at module level — just verify button exists and is clickable
-    expect(regenBtn).toBeTruthy()
+    await user.click(screen.getByTitle('重新生成'))
+    expect(mockRegenMutate).toHaveBeenCalledWith({ mealId: 'm1', dish_slot: 'dish1' })
+  })
+
+  // ── inline edit ──────────────────────────────────────────────────────────────
+
+  it('shows edit form with pre-filled name when ✎ is clicked', async () => {
+    const user = userEvent.setup()
+    render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
+    await user.click(screen.getByTitle('编辑'))
+    const nameInput = screen.getByPlaceholderText('菜名')
+    expect(nameInput).toBeTruthy()
+    expect(nameInput.value).toBe('红烧鸡块')
+    expect(screen.getByPlaceholderText('食谱链接（可选）')).toBeTruthy()
+  })
+
+  it('cancels edit and restores dish card view', async () => {
+    const user = userEvent.setup()
+    render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
+    await user.click(screen.getByTitle('编辑'))
+    await user.click(screen.getByText('取消'))
+    expect(screen.getByText('红烧鸡块')).toBeTruthy()
+    expect(screen.queryByPlaceholderText('菜名')).toBeNull()
+  })
+
+  it('calls updateMeal.mutate with new dish name on save', async () => {
+    mockUpdateMutate.mockImplementation((_data, opts) => opts?.onSuccess?.())
+    const user = userEvent.setup()
+    render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
+    await user.click(screen.getByTitle('编辑'))
+    const nameInput = screen.getByPlaceholderText('菜名')
+    await user.clear(nameInput)
+    await user.type(nameInput, '新菜名')
+    await user.click(screen.getByText('保存'))
+    expect(mockUpdateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mealId: 'm1',
+        dish_slot: 'dish1',
+        dish: expect.objectContaining({ name: '新菜名' }),
+      }),
+      expect.any(Object)
+    )
+  })
+
+  it('includes custom URL in saved dish when provided', async () => {
+    mockUpdateMutate.mockImplementation((_data, opts) => opts?.onSuccess?.())
+    const user = userEvent.setup()
+    render(<DishCard dish={mockDish} mealId="m1" slot="dish1" />, { wrapper })
+    await user.click(screen.getByTitle('编辑'))
+    await user.type(screen.getByPlaceholderText('食谱链接（可选）'), 'https://example.com/recipe')
+    await user.click(screen.getByText('保存'))
+    expect(mockUpdateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dish: expect.objectContaining({ url: 'https://example.com/recipe' }),
+      }),
+      expect.any(Object)
+    )
+  })
+
+  it('pre-fills existing dish.url in URL input', async () => {
+    const user = userEvent.setup()
+    const dishWithUrl = { ...mockDish, url: 'https://existing.com' }
+    render(<DishCard dish={dishWithUrl} mealId="m1" slot="dish1" />, { wrapper })
+    await user.click(screen.getByTitle('编辑'))
+    expect(screen.getByPlaceholderText('食谱链接（可选）').value).toBe('https://existing.com')
   })
 })

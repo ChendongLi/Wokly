@@ -3,11 +3,13 @@ import MenuTab from './components/MenuTab'
 import ShopTab from './components/ShopTab'
 import HistoryTab from './components/HistoryTab'
 import Settings from './components/Settings'
+import PromptTab from './components/PromptTab'
 
 const TABS = [
   { id: 'menu', label: '菜单', icon: '🍽️' },
   { id: 'shop', label: '购物', icon: '🛒' },
   { id: 'history', label: '历史', icon: '📅' },
+  { id: 'prompt', label: '提示词', icon: '📝' },
   { id: 'settings', label: '设置', icon: '⚙️' },
 ]
 
@@ -21,6 +23,7 @@ export default function App() {
         {activeTab === 'menu' && <MenuTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'history' && <HistoryTab />}
+        {activeTab === 'prompt' && <PromptTab />}
         {activeTab === 'settings' && <Settings />}
       </main>
 

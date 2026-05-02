@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -7,18 +8,22 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from database import get_db
 from models import (
+    Config,
     Ingredient,
     IngredientSchema,
     IngredientUpdateRequest,
     Meal,
     MealSchema,
     MealUpdateRequest,
+    PromptUpdateRequest,
     Week,
     WeekSchema,
     WeekSummarySchema,
 )
 from services.generator import extract_ingredients, generate_week_menu
 from services.regen import regen_single_dish
+
+_SYSTEM_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "menu_system.txt"
 
 router = APIRouter(prefix="/api")
 
@@ -81,8 +86,12 @@ async def generate_menu(db: AsyncSession = Depends(get_db)):
 
     week.status = "pending"
 
+    prompt_result = await db.execute(select(Config).where(Config.key == "menu_system_prompt"))
+    prompt_config = prompt_result.scalar_one_or_none()
+    custom_prompt = prompt_config.value if prompt_config else None
+
     try:
-        menu = await generate_week_menu(str(monday))
+        menu = await generate_week_menu(str(monday), system_text=custom_prompt)
     except RuntimeError as e:
         week.status = "failed"
         await db.commit()
@@ -291,3 +300,44 @@ async def update_ingredient(
 @router.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# ── GET /api/prompt ───────────────────────────────────────────────────────────
+
+
+@router.get("/prompt")
+async def get_prompt(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Config).where(Config.key == "menu_system_prompt"))
+    config = result.scalar_one_or_none()
+    if config:
+        return {"content": config.value, "is_custom": True}
+    return {"content": _SYSTEM_PROMPT_PATH.read_text(encoding="utf-8"), "is_custom": False}
+
+
+# ── PUT /api/prompt ───────────────────────────────────────────────────────────
+
+
+@router.put("/prompt")
+async def update_prompt(body: PromptUpdateRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Config).where(Config.key == "menu_system_prompt"))
+    config = result.scalar_one_or_none()
+    if config:
+        config.value = body.content
+    else:
+        config = Config(key="menu_system_prompt", value=body.content)
+        db.add(config)
+    await db.commit()
+    return {"message": "Prompt updated"}
+
+
+# ── DELETE /api/prompt ────────────────────────────────────────────────────────
+
+
+@router.delete("/prompt")
+async def reset_prompt(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Config).where(Config.key == "menu_system_prompt"))
+    config = result.scalar_one_or_none()
+    if config:
+        await db.delete(config)
+        await db.commit()
+    return {"content": _SYSTEM_PROMPT_PATH.read_text(encoding="utf-8"), "is_custom": False}

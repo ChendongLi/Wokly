@@ -89,3 +89,30 @@ export function useHealth() {
     retry: false,
   })
 }
+
+export function useGetPrompt() {
+  return useQuery({
+    queryKey: ['prompt'],
+    queryFn: () => api('/api/prompt'),
+  })
+}
+
+export function useUpdatePrompt() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (content) =>
+      api('/api/prompt', {
+        method: 'PUT',
+        body: JSON.stringify({ content }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['prompt'] }),
+  })
+}
+
+export function useResetPrompt() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api('/api/prompt', { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['prompt'] }),
+  })
+}
