@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import RecipeDrawer from './RecipeDrawer'
-import { useRegenDish, useUpdateMeal } from '../hooks/useMenu'
+import { useFillDish, useRegenDish, useUpdateMeal } from '../hooks/useMenu'
 
 const TAG_LABELS = { meat: '荤', veg: '素', soup: '汤', opt: '选' }
 const TAG_COLORS = {
@@ -21,6 +21,7 @@ export default function DishCard({ dish, mealId, slot, readOnly = false }) {
   const [editUrl, setEditUrl] = useState('')
   const regen = useRegenDish()
   const updateMeal = useUpdateMeal()
+  const fillDish = useFillDish()
 
   if (!dish) return null
 
@@ -45,14 +46,18 @@ export default function DishCard({ dish, mealId, slot, readOnly = false }) {
     e?.stopPropagation()
     const trimmedName = editName.trim()
     if (!trimmedName) return
-    updateMeal.mutate(
-      {
-        mealId,
-        dish_slot: slot,
-        dish: { ...dish, name: trimmedName, url: editUrl.trim() || undefined },
-      },
-      { onSuccess: () => setEditing(false) }
-    )
+    const trimmedUrl = editUrl.trim() || undefined
+    if (trimmedName !== dish.name) {
+      fillDish.mutate(
+        { mealId, dish_slot: slot, name: trimmedName, url: trimmedUrl },
+        { onSuccess: () => setEditing(false) }
+      )
+    } else {
+      updateMeal.mutate(
+        { mealId, dish_slot: slot, dish: { ...dish, name: trimmedName, url: trimmedUrl } },
+        { onSuccess: () => setEditing(false) }
+      )
+    }
   }
 
   if (editing) {
@@ -84,10 +89,10 @@ export default function DishCard({ dish, mealId, slot, readOnly = false }) {
           </button>
           <button
             onClick={saveEdit}
-            disabled={updateMeal.isPending}
+            disabled={updateMeal.isPending || fillDish.isPending}
             className="flex-1 py-1.5 rounded-lg bg-orange-500 text-white text-sm font-medium disabled:opacity-50"
           >
-            {updateMeal.isPending ? '保存中…' : '保存'}
+            {updateMeal.isPending || fillDish.isPending ? '保存中…' : '保存'}
           </button>
         </div>
       </div>

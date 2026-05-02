@@ -36,6 +36,18 @@ export function useUpdateMeal() {
   })
 }
 
+export function useFillDish() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ mealId, dish_slot, name, url }) =>
+      api(`/api/meal/${mealId}/fill`, {
+        method: 'POST',
+        body: JSON.stringify({ dish_slot, name, url }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['week'] }),
+  })
+}
+
 export function useRegenDish() {
   const qc = useQueryClient()
   return useMutation({

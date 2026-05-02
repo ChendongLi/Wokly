@@ -21,7 +21,7 @@ from models import (
     WeekSummarySchema,
 )
 from services.generator import extract_ingredients, generate_week_menu
-from services.regen import regen_single_dish
+from services.regen import fill_dish_by_name, regen_single_dish
 
 _SYSTEM_PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "menu_system.txt"
 
@@ -201,6 +201,59 @@ async def regen_meal_dish(
         diff_level=diff_level,
         existing_dishes=existing_names,
     )
+
+    if dish_slot == "dish1":
+        meal.dish1 = new_dish
+    elif dish_slot == "dish2":
+        meal.dish2 = new_dish
+    elif dish_slot == "optional_dish":
+        meal.optional_dish = new_dish
+    elif dish_slot == "soup":
+        meal.soup = new_dish
+    flag_modified(meal, dish_slot)
+
+    await db.commit()
+    await db.refresh(meal)
+    return meal
+
+
+# ── POST /api/meal/{id}/fill ──────────────────────────────────────────────────
+
+
+@router.post("/meal/{meal_id}/fill", response_model=MealSchema)
+async def fill_meal_dish(
+    meal_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Meal).where(Meal.id == meal_id))
+    meal = result.scalar_one_or_none()
+    if not meal:
+        raise HTTPException(status_code=404, detail="Meal not found")
+
+    dish_slot = body.get("dish_slot", "dish1")
+    name = body.get("name", "").strip()
+    url = body.get("url") or None
+
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    current_dish = getattr(meal, dish_slot, None) or {}
+    tag = current_dish.get("tag", "veg") if isinstance(current_dish, dict) else "veg"
+
+    try:
+        new_dish = await fill_dish_by_name(name=name, tag=tag, url=url)
+    except Exception:
+        new_dish = {
+            "name": name,
+            "tag": tag,
+            "diff": 2,
+            "style": "",
+            "ingredients": "",
+            "steps": [],
+        }
+        if url:
+            new_dish["url"] = url
 
     if dish_slot == "dish1":
         meal.dish1 = new_dish
