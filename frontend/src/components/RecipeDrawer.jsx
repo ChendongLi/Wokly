@@ -21,7 +21,8 @@ export default function RecipeDrawer({ dish, onClose }) {
 
   if (!dish) return null
 
-  const xhsUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(dish.search_query || dish.name)}`
+  const keyword = encodeURIComponent(dish.search_query || dish.name)
+  const xhsUrl = `https://oia.xiaohongshu.com/oia?deeplink=xhsdiscover%3A%2F%2Fsearch%2Fresult%3Fkeyword%3D${keyword}`
   const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent((dish.search_query || dish.name) + ' 做法')}`
 
   return (
