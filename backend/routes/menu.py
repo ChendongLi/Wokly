@@ -90,8 +90,22 @@ async def generate_menu(db: AsyncSession = Depends(get_db)):
     prompt_config = prompt_result.scalar_one_or_none()
     custom_prompt = prompt_config.value if prompt_config else None
 
+    prev_result = await db.execute(
+        select(Week)
+        .where(Week.week_start < monday, Week.status == "ready")
+        .order_by(Week.week_start.desc())
+        .limit(1)
+    )
+    prev_week = prev_result.scalar_one_or_none()
+    prev_dishes: list[str] = []
+    if prev_week:
+        await db.refresh(prev_week, ["meals"])
+        prev_dishes = await _get_all_dish_names(db, prev_week.id)
+
     try:
-        menu = await generate_week_menu(str(monday), system_text=custom_prompt)
+        menu = await generate_week_menu(
+            str(monday), system_text=custom_prompt, prev_dishes=prev_dishes
+        )
     except RuntimeError as e:
         week.status = "failed"
         await db.commit()

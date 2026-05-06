@@ -392,7 +392,11 @@ _MOCK_MENU = {
 }
 
 
-async def generate_week_menu(week_start: str, system_text: str | None = None) -> dict:
+async def generate_week_menu(
+    week_start: str,
+    system_text: str | None = None,
+    prev_dishes: list[str] | None = None,
+) -> dict:
     if os.getenv("USE_MOCK_MENU") == "1":
         import copy
 
@@ -404,9 +408,14 @@ async def generate_week_menu(week_start: str, system_text: str | None = None) ->
     if system_text is None:
         system_text = SYSTEM_PROMPT.read_text(encoding="utf-8")
 
-    messages: list[dict] = [
-        {"role": "user", "content": f"请生成从 {week_start} 开始那一周（周一至周五）的菜单。"}
-    ]
+    user_content = f"请生成从 {week_start} 开始那一周（周一至周五）的菜单。"
+    if prev_dishes:
+        names = "、".join(prev_dishes)
+        user_content += (
+            f"\n\n上周菜品列表如下。本周允许最多重复2道菜，" f"其余菜名请确保与上周不同：{names}"
+        )
+
+    messages: list[dict] = [{"role": "user", "content": user_content}]
 
     for attempt in range(3):
         raw_text, stop_reason = await llm.chat(system_text, messages, max_tokens=8192)
